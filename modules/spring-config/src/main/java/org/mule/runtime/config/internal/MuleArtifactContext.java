@@ -230,7 +230,7 @@ public class MuleArtifactContext extends AbstractRefreshableConfigApplicationCon
         new BeanDefinitionFactory(componentBuildingDefinitionRegistry, muleContext.getErrorTypeRepository());
 
     createApplicationModel();
-    validateAllConfigElementHaveParsers();
+    // initialize();
 
     this.configurationDependencyResolver =
         new ConfigurationDependencyResolver(applicationModel, componentBuildingDefinitionRegistry);
@@ -306,12 +306,20 @@ public class MuleArtifactContext extends AbstractRefreshableConfigApplicationCon
       applicationModel = new ApplicationModel(artifactConfig, artifactDeclaration, extensions,
                                               artifactProperties, parentConfigurationProperties,
                                               of(componentBuildingDefinitionRegistry),
-                                              true, externalResourceProvider);
+                                              externalResourceProvider);
     } catch (MuleRuntimeException e) {
       throw e;
     } catch (Exception e) {
       throw new MuleRuntimeException(e);
     }
+  }
+
+  public void initialize() {
+    Set<ExtensionModel> extensions =
+        muleContext.getExtensionManager() != null ? muleContext.getExtensionManager().getExtensions() : emptySet();
+    applicationModel.macroExpandXmlSdkComponents(extensions);
+
+    validateAllConfigElementHaveParsers();
   }
 
   @Override
