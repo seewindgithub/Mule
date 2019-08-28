@@ -1105,6 +1105,11 @@
             </dependency>
             <dependency>
                 <groupId>org.mule.runtime</groupId>
+                <artifactId>mule-artifact-ast-dependency-graph</artifactId>
+                <version>${muleAstVersion}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mule.runtime</groupId>
                 <artifactId>mule-extensions-api</artifactId>
                 <version>${muleExtensionsApiVersion}</version>
             </dependency>
