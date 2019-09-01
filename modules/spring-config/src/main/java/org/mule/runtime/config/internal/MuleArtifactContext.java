@@ -46,6 +46,7 @@ import org.mule.runtime.api.meta.model.ExtensionModel;
 import org.mule.runtime.api.util.Pair;
 import org.mule.runtime.api.util.ResourceLocator;
 import org.mule.runtime.app.declaration.api.ArtifactDeclaration;
+import org.mule.runtime.ast.api.ArtifactAst;
 import org.mule.runtime.config.api.dsl.model.ComponentBuildingDefinitionRegistry;
 import org.mule.runtime.config.api.dsl.model.ResourceProvider;
 import org.mule.runtime.config.api.dsl.processor.ArtifactConfig;
@@ -357,12 +358,12 @@ public class MuleArtifactContext extends AbstractRefreshableConfigApplicationCon
     ((ObjectProviderAwareBeanFactory) beanFactory).setObjectProviders(objectProviders);
   }
 
-  private List<Pair<ComponentModel, Optional<String>>> lookObjectProvidersComponentModels(ApplicationModel applicationModel) {
+  private List<Pair<ComponentModel, Optional<String>>> lookObjectProvidersComponentModels(ArtifactAst applicationModel) {
     List<Pair<ComponentModel, Optional<String>>> objectProviders = new ArrayList<>();
-    applicationModel.executeOnEveryRootElement(componentModel -> {
-      if (componentModel.isEnabled() && componentModel.getType() != null
-          && ConfigurableObjectProvider.class.isAssignableFrom(componentModel.getType())) {
-        objectProviders.add(new Pair<>(componentModel, ofNullable(componentModel.getNameAttribute())));
+    applicationModel.topLevelComponentsStream().forEach(componentModel -> {
+      if (((ComponentModel) componentModel).isEnabled() && ((ComponentModel) componentModel).getType() != null
+          && ConfigurableObjectProvider.class.isAssignableFrom(((ComponentModel) componentModel).getType())) {
+        objectProviders.add(new Pair<>((ComponentModel) componentModel, componentModel.getName()));
       }
     });
     return objectProviders;
@@ -430,7 +431,7 @@ public class MuleArtifactContext extends AbstractRefreshableConfigApplicationCon
    * @param mustBeRoot if the component must be root to be created.
    * @return an order list of the created bean names. The order must be respected for the creation of the objects.
    */
-  protected List<String> createApplicationComponents(DefaultListableBeanFactory beanFactory, ApplicationModel applicationModel,
+  protected List<String> createApplicationComponents(DefaultListableBeanFactory beanFactory, ArtifactAst applicationModel,
                                                      boolean mustBeRoot) {
 
     // This should only be done once at the initial application model creation, called from Spring
@@ -451,7 +452,7 @@ public class MuleArtifactContext extends AbstractRefreshableConfigApplicationCon
         });
 
     List<String> createdComponentModels = new ArrayList<>();
-    applicationModel.executeOnEveryMuleComponentTree(cm -> {
+    applicationModel.recursiveStream().forEach(cm -> {
       SpringComponentModel componentModel = (SpringComponentModel) cm;
       if (!mustBeRoot || componentModel.isRoot()) {
         if (beanDefinitionFactory.isComponentIgnored(componentModel.getIdentifier())) {
@@ -492,7 +493,7 @@ public class MuleArtifactContext extends AbstractRefreshableConfigApplicationCon
           beanDefinitionFactory.resolveComponentRecursively(componentModel, beanFactory, null, null,
                                                             componentLocator);
         }
-        componentLocator.addComponentLocation(cm.getComponentLocation());
+        componentLocator.addComponentLocation(cm.getLocation());
       }
     });
 

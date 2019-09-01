@@ -37,12 +37,17 @@ import org.mule.runtime.api.lifecycle.Initialisable;
 import org.mule.runtime.api.lifecycle.InitialisationException;
 import org.mule.runtime.api.lifecycle.Startable;
 import org.mule.runtime.api.metadata.MetadataService;
-import org.mule.runtime.api.util.Reference;
 import org.mule.runtime.api.value.ValueProviderService;
 import org.mule.runtime.app.declaration.api.ArtifactDeclaration;
+import org.mule.runtime.ast.api.ArtifactAst;
+import org.mule.runtime.ast.api.ComponentAst;
+import org.mule.runtime.ast.graph.api.ArtifactAstGraph;
+import org.mule.runtime.ast.graph.api.ArtifactAstGraphFactory;
 import org.mule.runtime.config.internal.dsl.model.ConfigurationDependencyResolver;
 import org.mule.runtime.config.internal.dsl.model.MinimalApplicationModelGenerator;
-import org.mule.runtime.config.internal.model.ApplicationModel;
+import org.mule.runtime.config.internal.dsl.model.NoSuchComponentModelException;
+import org.mule.runtime.config.internal.dsl.model.SpringComponentModel;
+import org.mule.runtime.config.internal.dsl.processor.ObjectTypeVisitor;
 import org.mule.runtime.config.internal.model.ComponentModel;
 import org.mule.runtime.core.api.MuleContext;
 import org.mule.runtime.core.api.config.MuleDeploymentProperties;
@@ -74,6 +79,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -95,11 +101,11 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
 
   private static final Logger LOGGER = LoggerFactory.getLogger(LazyMuleArtifactContext.class);
 
-  private List<String> beansCreated = new ArrayList<>();
+  private final List<String> beansCreated = new ArrayList<>();
 
-  private Optional<ComponentModelInitializer> parentComponentModelInitializer;
+  private final Optional<ComponentModelInitializer> parentComponentModelInitializer;
 
-  private ConfigurationDependencyResolver dependencyResolver;
+  private final ConfigurationDependencyResolver dependencyResolver;
 
   /**
    * Parses configuration files creating a spring ApplicationContext which is used as a parent registry using the SpringRegistry
@@ -111,7 +117,8 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
    *        org.mule.runtime.config.internal.SpringRegistry
    * @param parentConfigurationProperties
    * @param disableXmlValidations {@code true} when loading XML configs it will not apply validations.
-   * @param runtimeComponentBuildingDefinitionProvider provider for the runtime {@link org.mule.runtime.dsl.api.component.ComponentBuildingDefinition}s
+   * @param runtimeComponentBuildingDefinitionProvider provider for the runtime
+   *        {@link org.mule.runtime.dsl.api.component.ComponentBuildingDefinition}s
    * @since 4.0
    */
   public LazyMuleArtifactContext(MuleContext muleContext, ConfigResource[] artifactConfigResources,
@@ -166,8 +173,8 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
   }
 
   /**
-   * Custom logic to only enable those components that should be created when MuleContext is created.
-   * TransactionManagerFactory should be created before a TransactionManager is defined in the configuration.
+   * Custom logic to only enable those components that should be created when MuleContext is created. TransactionManagerFactory
+   * should be created before a TransactionManager is defined in the configuration.
    */
   private void enableMuleObjects() {
     ConfigurationDependencyResolver dependencyResolver = new ConfigurationDependencyResolver(this.applicationModel,
@@ -253,9 +260,8 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
     }
 
     /**
-     * Implementation that handles duplicates.
-     * Whenever a new object is added, then all its dependencies are added as well.
-     * So if one of those dependencies wants to be added again, it's ignored.
+     * Implementation that handles duplicates. Whenever a new object is added, then all its dependencies are added as well. So if
+     * one of those dependencies wants to be added again, it's ignored.
      */
     @Override
     protected int doAddObject(String name, Object object, List<Object> bucket) {
@@ -326,52 +332,132 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
 
       applicationModel.executeOnEveryMuleComponentTree(componentModel -> componentModel.setEnabled(false));
 
+
       MinimalApplicationModelGenerator minimalApplicationModelGenerator =
           new MinimalApplicationModelGenerator(dependencyResolver);
       // Force initialization of configuration component...
       resetMuleConfiguration(minimalApplicationModelGenerator);
+
       // User input components to be initialized...
-      Reference<ApplicationModel> minimalApplicationModel = new Reference<>();
-      predicateOptional
-          .ifPresent(predicate -> minimalApplicationModel.set(minimalApplicationModelGenerator.getMinimalModel(predicate)));
-      locationOptional
-          .ifPresent(location -> minimalApplicationModel.set(minimalApplicationModelGenerator.getMinimalModel(location)));
+      // Reference<ApplicationModel> minimalApplicationModelRef = new Reference<>();
+      // predicateOptional
+      // .ifPresent(predicate -> minimalApplicationModelRef.set(minimalApplicationModelGenerator.getMinimalModel(predicate)));
+      // locationOptional
+      // .ifPresent(location -> minimalApplicationModelRef.set(minimalApplicationModelGenerator.getMinimalModel(location)));
+      //
+      // ArtifactAst minimalApplicationModelOld = minimalApplicationModelRef.get();
 
+      // >>>>>>>
+      // User input components to be initialized...
+      final ArtifactAstGraph graph = ArtifactAstGraphFactory.generateFor(applicationModel);
 
-      if (parentComponentModelInitializerAdapter.isPresent()) {
-        List<String> missingComponentNames = dependencyResolver.getMissingDependencies().stream()
-            .filter(dependencyNode -> dependencyNode.isTopLevel())
-            .map(dependencyNode -> dependencyNode.getComponentName())
-            .collect(toList());
-        parentComponentModelInitializerAdapter.get().initializeComponents(componentModel -> {
-          if (componentModel.getNameAttribute() != null) {
-            return missingComponentNames.contains(componentModel.getNameAttribute());
-          }
-          return false;
+      final Predicate<ComponentAst> basePredicate =
+          predicateOptional.orElseGet(() -> comp -> ((ComponentAst) comp).getLocation() != null &&
+              ((ComponentAst) comp).getLocation().getLocation().equals(locationOptional.get().toString()));
+
+      final Predicate<? super ComponentAst> txManagerPredicate = componentModel -> {
+        final ObjectTypeVisitor objectTypeVisitor = new ObjectTypeVisitor((ComponentModel) componentModel);
+        return componentBuildingDefinitionRegistry.getBuildingDefinition(componentModel.getIdentifier())
+            .map(componentBuildingDefinition -> {
+              componentBuildingDefinition.getTypeDefinition().visit(objectTypeVisitor);
+              return TransactionManagerFactory.class.isAssignableFrom(objectTypeVisitor.getType());
+            }).orElse(false);
+      };
+
+      final Predicate<? super ComponentAst> configPredicate = componentModel -> componentModel.getIdentifier()
+          .equals(CONFIGURATION_IDENTIFIER);
+
+      final Predicate<? super ComponentAst> springModulePredicate =
+          componentModel -> "spring".equals(componentModel.getIdentifier().getNamespace())
+              && ("config".equals(componentModel.getIdentifier().getName()) ||
+                  "security-manager".equals(componentModel.getIdentifier().getName()));
+
+      final Predicate<? super ComponentAst> alwaysEnabledPredicate = componentModel -> {
+        return getDependencyResolver().resolveAlwaysEnabledComponents().stream().anyMatch(dependencyNode -> {
+          return !dependencyNode.isTopLevel() && dependencyNode.isUnnamedTopLevel() && dependencyNode.getComponentIdentifier()
+              .map(depId -> componentModel.getIdentifier().equals(depId)).orElse(false);
         });
-      } else {
-        dependencyResolver.getMissingDependencies().stream().forEach(globalElementName -> {
-          if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug(String.format("Ignoring dependency %s because it does not exists", globalElementName));
-          }
-        });
+      };
+
+      // final ArtifactAst minimalApplicationModel = graph.minimalArtifactFor(basePredicate
+      ArtifactAst minimalApplicationModel = graph.minimalArtifactFor(basePredicate
+          .or(txManagerPredicate)
+          .or(configPredicate)
+          .or(springModulePredicate)
+          .or(alwaysEnabledPredicate));
+
+      if (locationOptional.isPresent()) {
+        if (minimalApplicationModel.recursiveStream()
+            .noneMatch(comp -> comp.getLocation() != null
+                && comp.getLocation().getLocation().equals(locationOptional.get().toString()))) {
+          throw new NoSuchComponentModelException(createStaticMessage("No object found at location "
+              + locationOptional.get().toString()));
+        }
       }
 
+      minimalApplicationModel.recursiveStream().forEach(cm -> ((ComponentModel) cm).setEnabled(true));
+
+      System.out.println(" >>> Minimal: " + minimalApplicationModel.recursiveStream().collect(Collectors.toSet()));
+      // <<<<<<
+
+      // if (parentComponentModelInitializerAdapter.isPresent()) {
+      // List<String> missingComponentNames = dependencyResolver.getMissingDependencies().stream()
+      // .filter(dependencyNode -> dependencyNode.isTopLevel())
+      // .map(dependencyNode -> dependencyNode.getComponentName())
+      // .collect(toList());
+      // parentComponentModelInitializerAdapter.get().initializeComponents(componentModel -> {
+      // if (componentModel.getNameAttribute() != null) {
+      // return missingComponentNames.contains(componentModel.getNameAttribute());
+      // }
+      // return false;
+      // });
+      // } else {
+      // dependencyResolver.getMissingDependencies().stream().forEach(globalElementName -> {
+      // if (LOGGER.isDebugEnabled()) {
+      // LOGGER.debug(String.format("Ignoring dependency %s because it does not exists", globalElementName));
+      // }
+      // });
+      // }
+
       List<String> applicationComponents =
-          createApplicationComponents((DefaultListableBeanFactory) this.getBeanFactory(), minimalApplicationModel.get(), false);
+          createApplicationComponents((DefaultListableBeanFactory) this.getBeanFactory(), minimalApplicationModel, false);
+
+      System.out.println(" >>> applicationComponents: " + applicationComponents);
 
       super.prepareObjectProviders();
 
       List<Object> sortedObjects = createBeans(applicationComponents);
+
+      System.out.println(" >> sortedObjects: " + sortedObjects);
+
       return sortedObjects;
     });
   }
 
+  @Override
+  protected List<String> createApplicationComponents(DefaultListableBeanFactory beanFactory, ArtifactAst applicationModel,
+                                                     boolean mustBeRoot) {
+    final List<String> applicationComponents = super.createApplicationComponents(beanFactory, applicationModel, mustBeRoot);
+
+    applicationModel.recursiveStream()
+        .filter(cm -> ((ComponentModel) cm).isEnabled())
+        .filter(cm -> cm.getName().isPresent())
+        .filter(cm -> !applicationComponents.contains(cm.getName().get()))
+        .forEach(cm -> {
+          applicationComponents.add(0, cm.getName().get());
+          beanFactory.registerBeanDefinition(cm.getName().get(),
+                                             ((SpringComponentModel) cm).getBeanDefinition());
+          // postProcessBeanDefinition
+        });
+
+    return applicationComponents;
+  }
+
   /**
-   * Creates the beans based on the application component model names that were enabled by the minimal application model.
-   * It also populates the list of bean names created and returns the list of beans instantiated, the list of beans
-   * is sorted based on dependencies between components (even between configuration components, flow->config and
-   * config->config dependencies from the DSL).
+   * Creates the beans based on the application component model names that were enabled by the minimal application model. It also
+   * populates the list of bean names created and returns the list of beans instantiated, the list of beans is sorted based on
+   * dependencies between components (even between configuration components, flow->config and config->config dependencies from the
+   * DSL).
    *
    * @param applicationComponentNames name of components to be created.
    * @return List beans created for the given component names sorted by precedence.
@@ -483,8 +569,7 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
   }
 
   /**
-   * Apply the stop and dispose phases and unregister the bean from the registry.
-   * The phases are applied to each bean at a time.
+   * Apply the stop and dispose phases and unregister the bean from the registry. The phases are applied to each bean at a time.
    *
    * @param beanNames {@link Iterator} of bean names to be stopped, disposed and unregistered.
    */
