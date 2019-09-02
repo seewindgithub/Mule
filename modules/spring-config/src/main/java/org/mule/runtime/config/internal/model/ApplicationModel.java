@@ -299,6 +299,7 @@ public class ApplicationModel implements ArtifactAst {
   private final List<ComponentModel> muleComponentModels = new LinkedList<>();
   private PropertiesResolverConfigurationProperties configurationProperties;
   private final ResourceProvider externalResourceProvider;
+  private final ExtensionModelHelper extensionModelHelper;
   private final Map<String, ComponentModel> namedComponentModels = new HashMap<>();
   private final Map<String, ComponentModel> namedTopLevelComponentModels = new HashMap<>();
 
@@ -355,7 +356,8 @@ public class ApplicationModel implements ArtifactAst {
     // TODO MULE-13894 do this only on runtimeMode=true once unified extensionModel names to use camelCase (see smart connectors
     // and crafted declared extension models)
     resolveComponentTypes();
-    resolveTypedComponentIdentifier(new ExtensionModelHelper(extensionModels));
+    extensionModelHelper = new ExtensionModelHelper(extensionModels);
+    resolveTypedComponentIdentifier(extensionModelHelper);
     executeOnEveryMuleComponentTree(componentModel -> new ComponentLocationVisitor().accept(componentModel));
   }
 
@@ -365,7 +367,7 @@ public class ApplicationModel implements ArtifactAst {
     indexComponentModels();
 
     resolveComponentTypes();
-    resolveTypedComponentIdentifier(new ExtensionModelHelper(extensionModels));
+    resolveTypedComponentIdentifier(extensionModelHelper);
     executeOnEveryMuleComponentTree(componentModel -> new ComponentLocationVisitor().accept(componentModel));
   }
 
@@ -1197,8 +1199,7 @@ public class ApplicationModel implements ArtifactAst {
 
   @Override
   public Stream<ComponentAst> recursiveStream() {
-    return muleComponentModels.stream()
-        .map(cm -> (ComponentAst) cm)
+    return topLevelComponentsStream()
         .flatMap(cm -> cm.recursiveStream());
   }
 

@@ -134,13 +134,12 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
 
     // TODO move further down
     initialize();
+    graph = generateFor(applicationModel);
 
     // By default when a lazy context is created none of its components are enabled...
     this.applicationModel.executeOnEveryMuleComponentTree(componentModel -> componentModel.setEnabled(false));
 
     this.parentComponentModelInitializer = parentComponentModelInitializer;
-
-    graph = generateFor(applicationModel);
 
     muleContext.getCustomizationService().overrideDefaultServiceImpl(CONNECTIVITY_TESTING_SERVICE_KEY,
                                                                      new LazyConnectivityTestingService(this, () -> getRegistry()

@@ -430,7 +430,7 @@ public class MuleArtifactContext extends AbstractRefreshableConfigApplicationCon
   }
 
   /**
-   * Creates te definition for all the objects to be created form the enabled components in the {@code applicationModel}.
+   * Creates the definition for all the objects to be created form the enabled components in the {@code applicationModel}.
    *
    * @param beanFactory the bean factory in which definition must be created.
    * @param applicationModel the artifact application model.
