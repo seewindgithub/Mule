@@ -11,6 +11,7 @@ import static java.util.Optional.empty;
 import static java.util.Optional.of;
 import static java.util.stream.Collectors.toCollection;
 import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toSet;
 import static org.apache.commons.lang3.exception.ExceptionUtils.hasCause;
 import static org.mule.runtime.api.connectivity.ConnectivityTestingService.CONNECTIVITY_TESTING_SERVICE_KEY;
 import static org.mule.runtime.api.i18n.I18nMessageFactory.createStaticMessage;
@@ -23,6 +24,7 @@ import static org.mule.runtime.ast.graph.api.ArtifactAstGraphFactory.generateFor
 import static org.mule.runtime.config.api.dsl.CoreDslConstants.CONFIGURATION_IDENTIFIER;
 import static org.mule.runtime.config.internal.LazyConnectivityTestingService.NON_LAZY_CONNECTIVITY_TESTING_SERVICE;
 import static org.mule.runtime.config.internal.LazyValueProviderService.NON_LAZY_VALUE_PROVIDER_SERVICE;
+import static org.mule.runtime.config.internal.parsers.generic.AutoIdUtils.uniqueValue;
 import static org.mule.runtime.core.api.config.MuleDeploymentProperties.MULE_LAZY_INIT_DEPLOYMENT_PROPERTY;
 import static org.mule.runtime.core.api.config.MuleProperties.OBJECT_MULE_CONFIGURATION;
 import static org.mule.runtime.core.api.config.MuleProperties.OBJECT_SECURITY_MANAGER;
@@ -74,6 +76,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import org.slf4j.Logger;
@@ -180,6 +183,7 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
     muleContext.withLifecycleLock(() -> {
       if (muleContext.isInitialised()) {
         for (Object object : components) {
+          LOGGER.debug("Initializing component '{}'...", object.toString());
           try {
             if (object instanceof MessageProcessorChain) {
               // When created it will be initialized
@@ -193,6 +197,7 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
       }
       if (applyStartPhase && muleContext.isStarted()) {
         for (Object object : components) {
+          LOGGER.debug("Starting component '{}'...", object.toString());
           try {
             if (object instanceof MessageProcessorChain) {
               // Has to be ignored as when it is registered it will be started too
@@ -358,20 +363,25 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
     });
   }
 
+  /**
+   * Apart from calling {@link #createApplicationComponents(DefaultListableBeanFactory, ArtifactAst, boolean)} from the
+   * superclass, will handle orphan processors. That is, processors that are part of the minimal app but for which the containing
+   * flow is not.
+   */
   @Override
-  protected List<String> createApplicationComponents(DefaultListableBeanFactory beanFactory, ArtifactAst applicationModel,
+  protected List<String> createApplicationComponents(DefaultListableBeanFactory beanFactory, ArtifactAst minimalAppModel,
                                                      boolean mustBeRoot) {
-    final List<String> applicationComponents = super.createApplicationComponents(beanFactory, applicationModel, mustBeRoot);
+    final List<String> applicationComponents = super.createApplicationComponents(beanFactory, minimalAppModel, mustBeRoot);
 
-    // Register bean for orphan components.
-    //
-    // For instance, processors that are part of the minimal app but for which the containing flow is not.
-    applicationModel.recursiveStream()
+    // Handle orphan named components...
+    minimalAppModel.recursiveStream()
         .filter(cm -> ((ComponentModel) cm).isEnabled())
         .filter(cm -> cm.getName().isPresent())
         .filter(cm -> !applicationComponents.contains(cm.getName().get()))
         .forEach(cm -> {
           final String nameAttribute = cm.getName().get();
+          LOGGER.debug("Registering orphan named component '{}'...", nameAttribute);
+
           applicationComponents.add(0, nameAttribute);
           final BeanDefinition beanDef = ((SpringComponentModel) cm).getBeanDefinition();
           if (beanDef != null) {
@@ -380,6 +390,28 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
           }
         });
 
+    // Handle orphan components without name, rely on the location.
+    final Set<String> rootContainerNames = minimalAppModel.topLevelComponentsStream()
+        .filter(cm -> ((ComponentModel) cm).isEnabled())
+        .map(cm -> cm.getLocation().getRootContainerName())
+        .collect(toSet());
+    minimalAppModel.recursiveStream()
+        .filter(cm -> !rootContainerNames.contains(cm.getLocation().getRootContainerName()))
+        .forEach(cm -> {
+          final BeanDefinition beanDef = ((SpringComponentModel) cm).getBeanDefinition();
+          if (beanDef != null) {
+            final String beanName = cm.getName().orElse(uniqueValue(beanDef.getBeanClassName()));
+
+            LOGGER.debug("Registering orphan un-named component '{}'...", beanName);
+            applicationComponents.add(beanName);
+            beanFactory.registerBeanDefinition(beanName, beanDef);
+            postProcessBeanDefinition((SpringComponentModel) cm, beanFactory, beanName);
+          }
+        });
+
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug("applicationComponents to be created: {}", applicationComponents.toString());
+    }
     return applicationComponents;
   }
 
