@@ -7,12 +7,15 @@
 package org.mule.runtime.config.internal;
 
 import static com.google.common.collect.ImmutableList.copyOf;
+import static java.util.Arrays.asList;
 import static java.util.Optional.empty;
 import static java.util.Optional.of;
 import static java.util.stream.Collectors.toCollection;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 import static org.apache.commons.lang3.exception.ExceptionUtils.hasCause;
+import static org.mule.runtime.api.component.TypedComponentIdentifier.ComponentType.OPERATION;
+import static org.mule.runtime.api.component.TypedComponentIdentifier.ComponentType.SOURCE;
 import static org.mule.runtime.api.connectivity.ConnectivityTestingService.CONNECTIVITY_TESTING_SERVICE_KEY;
 import static org.mule.runtime.api.i18n.I18nMessageFactory.createStaticMessage;
 import static org.mule.runtime.api.metadata.MetadataService.METADATA_SERVICE_KEY;
@@ -376,6 +379,7 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
     // Handle orphan named components...
     minimalAppModel.recursiveStream()
         .filter(cm -> ((ComponentModel) cm).isEnabled())
+        .filter(cm -> asList(SOURCE, OPERATION).contains(cm.getComponentType()))
         .filter(cm -> cm.getName().isPresent())
         .filter(cm -> !applicationComponents.contains(cm.getName().get()))
         .forEach(cm -> {
