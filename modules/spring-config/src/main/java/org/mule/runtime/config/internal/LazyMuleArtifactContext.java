@@ -8,6 +8,7 @@ package org.mule.runtime.config.internal;
 
 import static com.google.common.collect.ImmutableList.copyOf;
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptySet;
 import static java.util.Optional.empty;
 import static java.util.Optional.of;
 import static java.util.stream.Collectors.toCollection;
@@ -45,6 +46,7 @@ import org.mule.runtime.api.exception.MuleRuntimeException;
 import org.mule.runtime.api.lifecycle.Initialisable;
 import org.mule.runtime.api.lifecycle.InitialisationException;
 import org.mule.runtime.api.lifecycle.Startable;
+import org.mule.runtime.api.meta.model.ExtensionModel;
 import org.mule.runtime.api.metadata.MetadataService;
 import org.mule.runtime.api.value.ValueProviderService;
 import org.mule.runtime.app.declaration.api.ArtifactDeclaration;
@@ -54,6 +56,8 @@ import org.mule.runtime.ast.graph.api.ArtifactAstGraph;
 import org.mule.runtime.config.internal.dsl.model.ConfigurationDependencyResolver;
 import org.mule.runtime.config.internal.dsl.model.NoSuchComponentModelException;
 import org.mule.runtime.config.internal.dsl.model.SpringComponentModel;
+import org.mule.runtime.config.internal.dsl.model.extension.xml.MacroExpandedArtifactAst;
+import org.mule.runtime.config.internal.dsl.model.extension.xml.MacroExpansionModulesModel;
 import org.mule.runtime.config.internal.dsl.processor.ObjectTypeVisitor;
 import org.mule.runtime.config.internal.model.ComponentModel;
 import org.mule.runtime.core.api.MuleContext;
@@ -84,7 +88,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -143,12 +146,8 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
     this.componentLocator = new SpringConfigurationComponentLocator();
 
     graph = generateFor(applicationModel);
-
-    System.out.println(" >> Before " + applicationModel.recursiveStream().collect(Collectors.toList()));
-
     // TODO move further down
     initialize();
-    System.out.println(" >> After  " + applicationModel.recursiveStream().collect(Collectors.toList()));
 
     this.parentComponentModelInitializer = parentComponentModelInitializer;
 
@@ -356,6 +355,12 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
           .or(configPredicate)
           .or(springModulePredicate)
           .or(alwaysEnabledPredicate));
+
+      Set<ExtensionModel> extensions =
+          muleContext.getExtensionManager() != null ? muleContext.getExtensionManager().getExtensions() : emptySet();
+      minimalApplicationModel =
+          new MacroExpandedArtifactAst(minimalApplicationModel,
+                                       new MacroExpansionModulesModel(this.applicationModel, extensions));
 
       if (locationOptional.isPresent()) {
         if (minimalApplicationModel.recursiveStream()
