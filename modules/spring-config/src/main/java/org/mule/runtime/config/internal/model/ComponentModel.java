@@ -73,8 +73,6 @@ public abstract class ComponentModel {
 
   private Object objectInstance;
   private Class<?> type;
-  private boolean enabled = true;
-
 
   /**
    * @return the line number in which the component was defined in the configuration file. It may be empty if the component was
@@ -319,15 +317,6 @@ public abstract class ComponentModel {
   }
 
   /**
-   * Sets the component as enabled, meaning that it should be created and the beanDefinition associated with created too.
-   *
-   * @param enabled if this component is enabled and has to be created.
-   */
-  public void setEnabled(boolean enabled) {
-    this.enabled = enabled;
-  }
-
-  /**
    * Executes the task on every inner component associated to this componentModel.
    *
    * @param task to be executed on inner components.
@@ -337,14 +326,6 @@ public abstract class ComponentModel {
       task.accept(componentModel);
       componentModel.executedOnEveryInnerComponent(task);
     }
-  }
-
-  /**
-   * @return {@code true} if this component is enabled and has to be created.
-   */
-  public boolean isEnabled() {
-    // return this.enabled;
-    return true;
   }
 
   /**

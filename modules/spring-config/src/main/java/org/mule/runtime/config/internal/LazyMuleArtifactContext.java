@@ -145,9 +145,6 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
     initialize();
     graph = generateFor(applicationModel);
 
-    // By default when a lazy context is created none of its components are enabled...
-    this.applicationModel.executeOnEveryMuleComponentTree(componentModel -> componentModel.setEnabled(false));
-
     this.parentComponentModelInitializer = parentComponentModelInitializer;
 
     final CustomizationService customizationService = muleContext.getCustomizationService();
@@ -316,8 +313,6 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
       objectProviders.clear();
       resetMuleSecurityManager();
 
-      applicationModel.executeOnEveryMuleComponentTree(componentModel -> componentModel.setEnabled(false));
-
       // Force initialization of configuration component...
       resetMuleConfiguration();
 
@@ -366,8 +361,6 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
         }
       }
 
-      minimalApplicationModel.recursiveStream().forEach(cm -> ((ComponentModel) cm).setEnabled(true));
-
       List<String> applicationComponents =
           createApplicationComponents((DefaultListableBeanFactory) this.getBeanFactory(), minimalApplicationModel, false);
 
@@ -393,7 +386,6 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
     // Handle orphan named components...
     orphanComponents.stream()
         .filter(cm -> asList(SOURCE, OPERATION, SCOPE).contains(cm.getComponentType()))
-        .filter(cm -> ((ComponentModel) cm).isEnabled())
         .filter(cm -> cm.getName().isPresent())
         .forEach(cm -> {
           final String nameAttribute = cm.getName().get();
@@ -409,7 +401,6 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
 
     // Handle orphan components without name, rely on the location.
     orphanComponents.stream()
-        .filter(cm -> ((ComponentModel) cm).isEnabled())
         .forEach(cm -> {
           final BeanDefinition beanDef = ((SpringComponentModel) cm).getBeanDefinition();
           if (beanDef != null) {
@@ -564,9 +555,6 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
 
   @Override
   protected void loadBeanDefinitions(DefaultListableBeanFactory beanFactory) throws IOException {
-    // TODO is this call needed?
-    // createApplicationComponents(beanFactory, emptyArtifact(), true);
-
     applicationModel.recursiveStream()
         .filter(cm -> !beanDefinitionFactory.isComponentIgnored(cm.getIdentifier()))
         .forEach(cm -> componentLocator.addComponentLocation(cm.getLocation()));
