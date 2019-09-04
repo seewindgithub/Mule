@@ -84,6 +84,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -142,8 +143,12 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
     this.componentLocator = new SpringConfigurationComponentLocator();
 
     graph = generateFor(applicationModel);
+
+    System.out.println(" >> Before " + applicationModel.recursiveStream().collect(Collectors.toList()));
+
     // TODO move further down
     initialize();
+    System.out.println(" >> After  " + applicationModel.recursiveStream().collect(Collectors.toList()));
 
     this.parentComponentModelInitializer = parentComponentModelInitializer;
 

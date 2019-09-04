@@ -361,14 +361,16 @@ public class ApplicationModel implements ArtifactAst {
     executeOnEveryMuleComponentTree(componentModel -> new ComponentLocationVisitor().accept(componentModel));
   }
 
-  public void macroExpandXmlSdkComponents(Set<ExtensionModel> extensionModels) {
-    expandModules(extensionModels);
+  public ArtifactAst macroExpandXmlSdkComponents(Set<ExtensionModel> extensionModels) {
+    final ArtifactAst expanded = expandModules(extensionModels);
     // Have to index again the component models with macro expanded ones
     indexComponentModels();
 
     resolveComponentTypes();
     resolveTypedComponentIdentifier(extensionModelHelper);
     executeOnEveryMuleComponentTree(componentModel -> new ComponentLocationVisitor().accept(componentModel));
+
+    return expanded;
   }
 
   private void indexComponentModels() {
@@ -1164,8 +1166,8 @@ public class ApplicationModel implements ArtifactAst {
    * @param extensionModels Set of {@link ExtensionModel extensionModels} that will be used to check if the element has to be
    *        expanded.
    */
-  private void expandModules(Set<ExtensionModel> extensionModels) {
-    new MacroExpansionModulesModel(this, extensionModels).expand();
+  private ArtifactAst expandModules(Set<ExtensionModel> extensionModels) {
+    return new MacroExpansionModulesModel(this, extensionModels).expand();
   }
 
   /**

@@ -34,6 +34,7 @@ import org.mule.runtime.api.meta.model.operation.OperationModel;
 import org.mule.runtime.api.meta.model.parameter.ParameterModel;
 import org.mule.runtime.api.meta.model.parameter.ParameterRole;
 import org.mule.runtime.api.meta.model.util.IdempotentExtensionWalker;
+import org.mule.runtime.ast.api.ArtifactAst;
 import org.mule.runtime.config.internal.dsl.model.extension.xml.property.GlobalElementComponentModelModelProperty;
 import org.mule.runtime.config.internal.dsl.model.extension.xml.property.OperationComponentModelModelProperty;
 import org.mule.runtime.config.internal.dsl.model.extension.xml.property.PrivateOperationsModelProperty;
@@ -118,12 +119,14 @@ public class MacroExpansionModuleModel {
     this.dslSyntaxResolver = DslSyntaxResolver.getDefault(extensionModel, dslResolvingContext);
   }
 
-  public void expand() {
+  public ArtifactAst expand() {
     final List<ComponentModel> moduleGlobalElements = getModuleGlobalElements();
     final Set<String> moduleGlobalElementsNames =
         moduleGlobalElements.stream().map(ComponentModel::getNameAttribute).collect(toSet());
     expandOperations(moduleGlobalElementsNames);
     expandGlobalElements(moduleGlobalElements, moduleGlobalElementsNames);
+
+    return this.applicationModel;
   }
 
   private void expandOperations(Set<String> moduleGlobalElementsNames) {

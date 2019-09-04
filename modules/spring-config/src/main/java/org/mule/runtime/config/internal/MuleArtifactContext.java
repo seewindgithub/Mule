@@ -317,7 +317,7 @@ public class MuleArtifactContext extends AbstractRefreshableConfigApplicationCon
   public void initialize() {
     Set<ExtensionModel> extensions =
         muleContext.getExtensionManager() != null ? muleContext.getExtensionManager().getExtensions() : emptySet();
-    applicationModel.macroExpandXmlSdkComponents(extensions);
+    applicationModel = (ApplicationModel) applicationModel.macroExpandXmlSdkComponents(extensions);
 
     validateAllConfigElementHaveParsers();
   }

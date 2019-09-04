@@ -13,6 +13,7 @@ import static org.apache.commons.lang3.StringUtils.repeat;
 import static org.mule.runtime.config.internal.dsl.model.extension.xml.ComponentModelReaderHelper.toXml;
 
 import org.mule.runtime.api.meta.model.ExtensionModel;
+import org.mule.runtime.ast.api.ArtifactAst;
 import org.mule.runtime.config.internal.model.ApplicationModel;
 import org.mule.runtime.config.internal.model.ComponentModel;
 import org.mule.runtime.extension.api.property.XmlExtensionModelProperty;
@@ -71,7 +72,7 @@ public class MacroExpansionModulesModel {
    * Goes through the entire xml mule application looking for the message processors that can be expanded, and then takes care of
    * the global elements if there are at least one {@link ExtensionModel} to macro expand.
    */
-  public void expand() {
+  public ArtifactAst expand() {
     for (ExtensionModel sortedExtension : sortedExtensions) {
       if (LOGGER.isDebugEnabled()) {
         LOGGER.debug(String.format("macro expanding '%s' connector, xmlns:%s=\"%s\"",
@@ -99,6 +100,8 @@ public class MacroExpansionModulesModel {
         });
       }
     }
+
+    return applicationModel;
   }
 
   /**
