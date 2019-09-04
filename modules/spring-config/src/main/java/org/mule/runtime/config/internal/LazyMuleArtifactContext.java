@@ -72,6 +72,7 @@ import org.mule.runtime.dsl.api.ConfigResource;
 import org.mule.runtime.dsl.api.component.ComponentBuildingDefinitionProvider;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -559,6 +560,16 @@ public class LazyMuleArtifactContext extends MuleArtifactContext
         }
       }
     }
+  }
+
+  @Override
+  protected void loadBeanDefinitions(DefaultListableBeanFactory beanFactory) throws IOException {
+    // TODO is this call needed?
+    // createApplicationComponents(beanFactory, emptyArtifact(), true);
+
+    applicationModel.recursiveStream()
+        .filter(cm -> !beanDefinitionFactory.isComponentIgnored(cm.getIdentifier()))
+        .forEach(cm -> componentLocator.addComponentLocation(cm.getLocation()));
   }
 
   /**
