@@ -74,7 +74,13 @@ public class MacroExpansionModulesModel {
    */
   public ArtifactAst expand() {
     for (ExtensionModel sortedExtension : sortedExtensions) {
-      doExpand(sortedExtension);
+      if (LOGGER.isDebugEnabled()) {
+        LOGGER.debug(String.format("macro expanding '%s' connector, xmlns:%s=\"%s\"",
+                                   sortedExtension.getName(),
+                                   sortedExtension.getXmlDslModel().getPrefix(),
+                                   sortedExtension.getXmlDslModel().getNamespace()));
+      }
+      new MacroExpansionModuleModel(applicationModel, sortedExtension).expand();
     }
     if (LOGGER.isDebugEnabled()) {
       //only log the macro expanded app if there are smart connectors in it
@@ -96,16 +102,6 @@ public class MacroExpansionModulesModel {
     }
 
     return applicationModel;
-  }
-
-  public void doExpand(ExtensionModel sortedExtension) {
-    if (LOGGER.isDebugEnabled()) {
-      LOGGER.debug(String.format("macro expanding '%s' connector, xmlns:%s=\"%s\"",
-                                 sortedExtension.getName(),
-                                 sortedExtension.getXmlDslModel().getPrefix(),
-                                 sortedExtension.getXmlDslModel().getNamespace()));
-    }
-    new MacroExpansionModuleModel(applicationModel, sortedExtension).expand();
   }
 
   /**
@@ -201,9 +197,5 @@ public class MacroExpansionModulesModel {
         .filter(parameter -> parameter.getKey().startsWith(XMLNS_ATTRIBUTE + ":"))
         .map(Map.Entry::getValue)
         .collect(Collectors.toSet());
-  }
-
-  public List<ExtensionModel> getSortedExtensions() {
-    return sortedExtensions;
   }
 }

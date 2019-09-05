@@ -112,7 +112,7 @@ public class MacroExpansionModuleModel {
    *        {@code extensions} map.
    * @param extensionModel the {@link ExtensionModel}s to macro expand in the parametrized {@link ApplicationModel}
    */
-  public MacroExpansionModuleModel(ApplicationModel applicationModel, ExtensionModel extensionModel) {
+  MacroExpansionModuleModel(ApplicationModel applicationModel, ExtensionModel extensionModel) {
     this.applicationModel = applicationModel;
     this.extensionModel = extensionModel;
     final DslResolvingContext dslResolvingContext = DslResolvingContext.getDefault(Collections.singleton(extensionModel));
@@ -131,11 +131,15 @@ public class MacroExpansionModuleModel {
 
   private void expandOperations(Set<String> moduleGlobalElementsNames) {
     applicationModel.executeOnEveryMuleComponentTree(containerComponentModel -> {
-      Map<Integer, ComponentModel> componentModelsToReplaceByIndex = new HashMap<>();
+      HashMap<Integer, ComponentModel> componentModelsToReplaceByIndex = new HashMap<>();
       IntStream.range(0, containerComponentModel.getInnerComponents().size()).forEach(i -> {
         ComponentModel operationRefModel = containerComponentModel.getInnerComponents().get(i);
-        expandOperation(moduleGlobalElementsNames, containerComponentModel, operationRefModel)
-            .ifPresent(moduleOperationChain -> {
+        lookForOperation(operationRefModel)
+            .ifPresent(operationModel -> {
+              final String containerName = calculateContainerRootName(containerComponentModel, operationModel);
+              final ComponentModel moduleOperationChain =
+                  createModuleOperationChain(operationRefModel, operationModel, moduleGlobalElementsNames, empty(),
+                                             containerName);
               componentModelsToReplaceByIndex.put(i, moduleOperationChain);
             });
       });
@@ -146,17 +150,6 @@ public class MacroExpansionModuleModel {
       }
       componentModelsToReplaceByIndex.clear();
     });
-  }
-
-  public Optional<ComponentModel> expandOperation(Set<String> moduleGlobalElementsNames, ComponentModel containerComponentModel,
-                                                   ComponentModel operationRefModel) {
-    return lookForOperation(operationRefModel)
-        .map(operationModel -> createModuleOperationChain(operationRefModel,
-                                                          operationModel,
-                                                          moduleGlobalElementsNames,
-                                                          empty(),
-                                                          calculateContainerRootName(containerComponentModel,
-                                                                                     operationModel)));
   }
 
   /**
@@ -228,7 +221,7 @@ public class MacroExpansionModuleModel {
     applicationModel.executeOnEveryMuleComponentTree(muleRootComponentModel -> {
       HashMap<ComponentModel, List<ComponentModel>> componentModelsToReplaceByIndex = new HashMap<>();
       for (ComponentModel configRefModel : muleRootComponentModel.getInnerComponents()) {
-        lookForConfiguration(configRefModel).ifPresent(configurationModel -> {
+        looForConfiguration(configRefModel).ifPresent(configurationModel -> {
           Map<String, String> propertiesMap = extractParameters(configRefModel,
                                                                 configurationModel
                                                                     .getAllParameterModels());
@@ -478,7 +471,7 @@ public class MacroExpansionModuleModel {
         .ifPresent(configParameter -> {
           // look for the global element which "name" attribute maps to "configParameter" value
           ComponentModel configRefComponentModel = applicationModel.getRootComponentModel().getInnerComponents().stream()
-              .filter(componentModel -> lookForConfiguration(componentModel).isPresent()
+              .filter(componentModel -> looForConfiguration(componentModel).isPresent()
                   && configParameter.equals(componentModel.getParameters().get(NAME_ATTRIBUTE)))
               .findFirst()
               .orElseThrow(() -> new IllegalArgumentException(
@@ -678,7 +671,7 @@ public class MacroExpansionModuleModel {
     return TNS_PREFIX.equals(operationComponentModel.getIdentifier().getNamespace());
   }
 
-  private Optional<ConfigurationModel> lookForConfiguration(ComponentModel componentModel) {
+  private Optional<ConfigurationModel> looForConfiguration(ComponentModel componentModel) {
     final ComponentIdentifier identifier = componentModel.getIdentifier();
     return identifier.getNamespace().equals(extensionModel.getXmlDslModel().getPrefix())
         ? extensionModel.getConfigurationModel(identifier.getName())
