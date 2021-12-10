@@ -221,7 +221,7 @@
         <jodaTimeVersion>2.5</jodaTimeVersion>
         <jschVersion>0.1.51</jschVersion>
         <junitVersion>4.13-SNAPSHOT</junitVersion>
-        <log4jVersion>2.8.2</log4jVersion>
+        <log4jVersion>2.15.0</log4jVersion>
         <disruptorVersion>3.3.0</disruptorVersion>
         <maven.buildnumber.plugin.version>1.1</maven.buildnumber.plugin.version>
         <maven.surefire.plugin.version>2.18.1</maven.surefire.plugin.version>
